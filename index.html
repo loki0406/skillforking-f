@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkillForge AI</title>
+  <script>
+    (function () {
+      try {
+        const stored = localStorage.getItem('sf_theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const useDark = stored ? stored === 'dark' : prefersDark;
+        if (useDark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    })();
+  </script>
+  <script>
+    (function () {
+      var w = window;
+      w.tailwind = w.tailwind || {};
+      w.tailwind.config = Object.assign({}, w.tailwind.config || {}, { darkMode: 'class' });
+    })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Dialogflow Messenger (used on Chat page) -->
+  <link rel="stylesheet" href="https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/themes/df-messenger-default.css">
+  <script src="https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/df-messenger.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; transition: background-color 200ms ease, color 200ms ease; }
+    html.dark body { background-color: #0b1220; }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #94a3b8; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background-color: #e2e8f0; }
+    html.dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; }
+    html.dark .custom-scrollbar::-webkit-scrollbar-track { background-color: #0f172a; }
+
+    .card-hover { transition: transform 0.3s ease, box-shadow 0.3s ease; }
+    .card-hover:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
+    .btn-primary { transition: background-color 0.15s; }
+    .interview-fullscreen-container { min-height: calc(100vh - 80px); padding-top: 2rem; padding-bottom: 2rem; }
+
+    /* Dialogflow placement (Chat page will also add container wrapper) */
+    df-messenger {
+      z-index: 999;
+      position: fixed;
+      --df-messenger-font-color: #000;
+      --df-messenger-font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      --df-messenger-chat-background: #f3f6fc;
+      --df-messenger-message-user-background: #d3e3fd;
+      --df-messenger-message-bot-background: #fff;
+      bottom: 50px;
+      right: 100px;
+      top: 100px;
+      width: 80%;
+      max-width: 1200px;
+    }
+
+    /* Chat page input bar */
+    .chat-input-wrapper { box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08); }
+
+    /* Disabled overlay for protected cards */
+    .protected-overlay { position: absolute; inset: 0; background: rgba(2,6,23,0.45); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; border-radius: 0.75rem; }
+
+    /* Subtle ringy back button */
+    .back-btn-style { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col transition-colors duration-200">
+  <div id="app" class="flex flex-col min-h-screen w-full"></div>
+
+  <!-- Mobile Sidebar -->
+  <div id="mobile-drawer" class="fixed inset-0 z-40 hidden" aria-hidden="true">
+    <div id="drawer-backdrop" class="absolute inset-0 bg-black/40"></div>
+    <aside class="absolute left-0 top-0 h-full w-72 max-w-[85%] bg-white dark:bg-gray-900 shadow-2xl border-r border-gray-200 dark:border-gray-800 p-4 flex flex-col">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center space-x-2">
+          <a id="drawer-logo-link" href="#" class="flex items-center" onclick="showPage('home'); closeDrawer(); return false;">
+            <img id="brand-logo-drawer" src="./logo.png" alt="Logo" class="w-8 h-8 object-contain" onerror="this.style.display='none'" />
+            <span class="ml-2 text-lg font-bold text-gray-900 dark:text-gray-100">SkillForge AI</span>
+          </a>
+        </div>
+        <button class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800" onclick="closeDrawer()"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <nav class="flex flex-col space-y-1">
+        <a href="#" onclick="showPage('home'); closeDrawer(); return false;" class="px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-100 flex items-center"><i data-lucide='home' class='w-5 h-5 mr-2'></i> Home</a>
+        <a href="#" onclick="showPage('contact'); closeDrawer(); return false;" class="px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-100 flex items-center"><i data-lucide='flag' class='w-5 h-5 mr-2'></i> Contact & Report</a>
+        <div id="drawer-auth-area" class="pt-2 border-t border-gray-200 dark:border-gray-800 mt-2"></div>
+      </nav>
+    </aside>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal-container" class="fixed inset-0 bg-gray-900 bg-opacity-70 z-50 hidden items-center justify-center p-4">
+    <div id="modal-content" class="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-6 rounded-xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0">
+      <h3 id="modal-title" class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-3"></h3>
+      <p id="modal-message" class="text-gray-600 dark:text-gray-300 mb-5 whitespace-pre-line"></p>
+      <div class="flex justify-end">
+        <button onclick="closeModal()" class="bg-indigo-600 text-white p-2 px-4 rounded-lg font-semibold hover:bg-indigo-700 transition duration-150">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase + App Scripts -->
+  <script type="module">
+    import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInWithCustomToken, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    try { setLogLevel('debug'); } catch (e) {}
+
+    const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-app-id';
+    const firebaseConfig = (typeof window._firebase_config !== 'undefined' && window._firebase_config)
+      ? (typeof window._firebase_config === 'string' ? JSON.parse(window._firebase_config) : window._firebase_config)
+      : {};
+
+    let app = null;
+    let db = null;
+    let auth = null;
+    let userId = null;
+    let isAuthReady = false;
+
+    window.db = null;
+    window.auth = null;
+    window.getUserId = () => userId;
+
+    function safeCall(fnName, ...args) {
+      if (typeof window[fnName] === 'function') {
+        try { window[fnName](...args); } catch (e) { console.error(e); }
+      }
+    }
+
+    async function initializeFirebase() {
+      try {
+        if (!firebaseConfig || Object.keys(firebaseConfig).length === 0) {
+          console.warn('Firebase config missing; using mock mode.');
+          isAuthReady = true;
+          userId = null;
+          safeCall('updateNavForAuth');
+          return;
+        }
+
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        window.db = db;
+        window.auth = auth;
+
+        onAuthStateChanged(auth, (user) => {
+          userId = user ? user.uid : null;
+          isAuthReady = true;
+          safeCall('updateNavForAuth');
+          if (user && window.currentPage === 'login') {
+            safeCall('showPage', 'home');
+          }
+        });
+
+        if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
+          await signInWithCustomToken(auth, window.__initial_auth_token);
+        }
+      } catch (error) {
+        console.error('Error initializing Firebase:', error);
+        isAuthReady = true;
+        userId = null;
+      }
+    }
+
+    window.initializeFirebase = initializeFirebase;
+
+    window.handleLogout = async () => {
+      if (auth) {
+        try { await signOut(auth); } catch (e) { console.error('Logout error', e); }
+      }
+      if (window.uiAuth) { window.uiAuth.isLoggedIn = false; window.uiAuth.profile = null; }
+      safeCall('updateNavForAuth');
+      safeCall('showPage', 'login');
+    };
+
+    window.firestore = {
+      async loadJobs() {
+        try {
+          if (!db || !auth || !auth.currentUser) return null;
+          const jobsRef = collection(db, 'jobs');
+          const snap = await getDocs(jobsRef);
+          const jobs = [];
+          snap.forEach(docSnap => {
+            const data = docSnap.data();
+            jobs.push({ id: docSnap.id, ...data });
+          });
+          return jobs;
+        } catch (e) {
+          console.warn('loadJobs fallback due to error:', e);
+          return null;
+        }
+      },
+      async getSavedJobsSet() { return null; },
+      async saveJob(_jobId) { return false; },
+      async unsaveJob(_jobId) { return false; },
+      async getAppliedJobsSet() { return null; },
+      async applyJob(_jobId) { return false; }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initializeFirebase();
+    });
+  </script>
+
+  <script>
+    // Theme helpers kept for dark mode persistence
+    function setTheme(theme) {
+      const root = document.documentElement;
+      if (theme === 'dark') root.classList.add('dark');
+      else root.classList.remove('dark');
+      try { localStorage.setItem('sf_theme', theme); } catch (e) {}
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+    }
+
+    // SPA navigation state
+    window.currentPage = 'home';
+    window.selectedInterviewId = null;
+    let currentInterviewStage = 'main';
+    const appContainer = document.getElementById('app');
+
+    // Simple UI auth state (independent of Firebase)
+    window.uiAuth = { isLoggedIn: false, profile: null };
+
+    // Modal
+    window.showModal = (title, message) => {
+      const container = document.getElementById('modal-container');
+      const content = document.getElementById('modal-content');
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-message').textContent = message;
+      container.classList.remove('hidden');
+      container.classList.add('flex');
+      setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+      }, 10);
+    };
+
+    window.closeModal = () => {
+      const container = document.getElementById('modal-container');
+      const content = document.getElementById('modal-content');
+      content.classList.remove('scale-100', 'opacity-100');
+      content.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => { container.classList.remove('flex'); container.classList.add('hidden'); }, 300);
+    };
+
+    // Drawer helpers
+    function openDrawer() {
+      const el = document.getElementById('mobile-drawer');
+      if (!el) return;
+      el.classList.remove('hidden');
+      setTimeout(() => { if (window.lucide && window.lucide.createIcons) window.lucide.createIcons(); }, 0);
+      if (typeof window.updateNavForAuth === 'function') window.updateNavForAuth();
+    }
+    function closeDrawer() { const el = document.getElementById('mobile-drawer'); if (!el) return; el.classList.add('hidden'); }
+    window.openDrawer = openDrawer;
+    window.closeDrawer = closeDrawer;
+
+    // Back stack for SPA
+    const historyStack = [];
+    function navigate(pageName) { if (window.currentPage) historyStack.push(window.currentPage); showPage(pageName); }
+    window.goBack = () => { if (historyStack.length === 0) { showPage('home', true); return; } const prev = historyStack.pop(); showPage(prev, true); };
+
+    function requireLogin(nextPage) {
+      showModal('Login Required', 'Please login to access this feature.');
+      window.currentPage = 'login';
+      renderPage();
+      if (nextPage) {
+        // Store where user wanted to go (optional enhancement)
+        try { localStorage.setItem('sf_next_page', nextPage); } catch(e) {}
+      }
+    }
+
+    function navigateToProtected(pageName) {
+      if (!window.uiAuth || !window.uiAuth.isLoggedIn) { requireLogin(pageName); return false; }
+      showPage(pageName);
+      return false;
+    }
+
+    // Auth nav updater (header + drawer)
+    window.updateNavForAuth = () => {
+      const authArea = document.getElementById('auth-area');
+      const drawerAuth = document.getElementById('drawer-auth-area');
+      const isLoggedIn = !!(window.uiAuth && window.uiAuth.isLoggedIn);
+      const profile = (window.uiAuth && window.uiAuth.profile) || {};
+      const displayName = (profile && (profile.username || profile.name || profile.email)) || 'User';
+
+      const authHtmlLoggedOut = `
+        <button onclick="showPage('login')" class="text-white hover:text-gray-200 transition duration-150 font-medium">Login/Signup</button>
+      `;
+      const authHtmlLoggedIn = `
+        <div class="relative">
+          <button id="profile-button" class="flex items-center space-x-2 text-white hover:text-indigo-200 transition duration-150">
+            <span class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/10 ring-1 ring-white/20 overflow-hidden">
+              <img id="header-avatar" class="w-9 h-9 rounded-full hidden" alt="avatar" />
+              <i id="header-avatar-icon" data-lucide="user" class="w-5 h-5"></i>
+            </span>
+            <span class="hidden sm:inline font-medium">${displayName}</span>
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+          </button>
+          <div id="profile-menu" class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-100 py-1 hidden">
+            <button onclick="handleProfileMenuSelect('profile')" class="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center"><i data-lucide="user" class="w-4 h-4 mr-2"></i> My Profile</button>
+            <button onclick="handleProfileMenuSelect('stats')" class="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center"><i data-lucide="bar-chart-3" class="w-4 h-4 mr-2"></i> Stats</button>
+            <button onclick="handleProfileMenuSelect('myinterviews')" class="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center"><i data-lucide="video" class="w-4 h-4 mr-2"></i> My Interviews</button>
+            <button onclick="handleProfileMenuSelect('webinfo')" class="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center"><i data-lucide="globe" class="w-4 h-4 mr-2"></i> Web Info</button>
+            <button onclick="handleProfileMenuSelect('logout')" class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 flex items-center"><i data-lucide="log-out" class="w-4 h-4 mr-2"></i> Logout</button>
+          </div>
+        </div>`;
+
+      if (authArea) authArea.innerHTML = isLoggedIn ? authHtmlLoggedIn : authHtmlLoggedOut;
+
+      if (drawerAuth) {
+        drawerAuth.innerHTML = isLoggedIn
+          ? `<button onclick="handleProfileMenuSelect('profile'); closeDrawer();" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-100 flex items-center"><i data-lucide='user' class='w-5 h-5 mr-2'></i> My Profile</button>
+             <button onclick="showPage('stats'); closeDrawer();" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-100 flex items-center"><i data-lucide='bar-chart-3' class='w-5 h-5 mr-2'></i> Stats</button>
+             <button onclick="showPage('myinterviews'); closeDrawer();" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-100 flex items-center"><i data-lucide='video' class='w-5 h-5 mr-2'></i> My Interviews</button>
+             <button onclick="showPage('webinfo'); closeDrawer();" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-100 flex items-center"><i data-lucide='globe' class='w-5 h-5 mr-2'></i> Web Info</button>
+             <button onclick="handleLogout(); closeDrawer();" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-red-600 flex items-center"><i data-lucide='log-out' class='w-5 h-5 mr-2'></i> Logout</button>`
+          : `<button onclick="showPage('login'); closeDrawer();" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-100 flex items-center"><i data-lucide='log-in' class='w-5 h-5 mr-2'></i> Login/Signup</button>`;
+      }
+
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+      setupHeaderInteractions();
+      loadHeaderAvatar();
+    };
+
+    window.toggleProfileMenu = () => { const menu = document.getElementById('profile-menu'); if (!menu) return; menu.classList.toggle('hidden'); };
+
+    window.handleProfileMenuSelect = (action) => {
+      const menu = document.getElementById('profile-menu');
+      if (menu) menu.classList.add('hidden');
+      if (action === 'profile') return showPage('profile');
+      if (action === 'stats') return showPage('stats');
+      if (action === 'webinfo') return showPage('webinfo');
+      if (action === 'myinterviews') return showPage('myinterviews');
+      if (action === 'logout') return window.handleLogout();
+    };
+
+    function setupHeaderInteractions() {
+      const btn = document.getElementById('profile-button');
+      if (btn) { btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); window.toggleProfileMenu(); }; }
+    }
+
+    // Header render with conditional back button and brand logo beside title
+    const renderHeader = () => {
+      const showBack = window.currentPage !== 'home';
+      return `
+        <header class="bg-indigo-600 dark:bg-indigo-700 shadow-lg sticky top-0 z-10">
+          <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2 sm:space-x-3">
+              <button class="sm:hidden mr-1 p-2 rounded text-white hover:bg-indigo-500" aria-label="Open menu" onclick="openDrawer()"><i data-lucide="menu" class="w-6 h-6"></i></button>
+              <button class="inline-flex mr-1 p-2 rounded text-white hover:bg-indigo-500 back-btn-style ${showBack ? '' : 'hidden'}" aria-label="Go back" onclick="goBack()"><i data-lucide="arrow-left" class="w-6 h-6"></i></button>
+              <a href="#" onclick="showPage('home'); return false;" class="flex items-center space-x-3">
+                <img id="brand-logo" src="./logo.png" alt="Logo" class="h-10 w-10 object-contain" onerror="this.style.display='none'" />
+                <h1 class="text-2xl font-bold text-white cursor-pointer hover:text-indigo-200 transition duration-150">SkillForge AI</h1>
+              </a>
+            </div>
+            <div class="hidden sm:flex items-center space-x-6">
+              <a href="#" onclick="showPage('home')" class="text-white hover:text-indigo-200 transition duration-150 font-medium">Home</a>
+              <a href="#" onclick="showPage('contact')" class="text-white hover:text-indigo-200 transition duration-150 font-medium">Contact & Report</a>
+              <div id="auth-area"></div>
+            </div>
+          </nav>
+        </header>`;
+    };
+
+    const renderPage = () => {
+      let content = '';
+      const fixedWidthClass = (window.currentPage === 'interview' && currentInterviewStage === 'start') ? 'flex-grow w-full' : 'flex-grow max-w-7xl mx-auto w-full px-3 sm:px-4 lg:px-8 py-6 md:py-10';
+
+      switch (window.currentPage) {
+        case 'home': content = renderHomePage(); break;
+        case 'login': content = renderLoginPage(); break;
+        case 'signup': content = renderSignupPage(); break;
+        case 'forgot': content = renderForgotPasswordPage(); break;
+        case 'profile': content = renderProfilePage(); break;
+        case 'stats': content = renderStatsPage(); break;
+        case 'webinfo': content = renderWebInfoPage(); break;
+        case 'chat': content = renderChatPage(); break;
+        case 'interview': content = renderInterviewPage(); break;
+        case 'contact': content = renderContactReportPage(); break;
+        case 'myinterviews': content = renderMyInterviewsPage(); break;
+        default: content = renderHomePage();
+      }
+
+      appContainer.innerHTML = renderHeader() + `
+        <main class="${fixedWidthClass}">${content}</main>
+      `;
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+
+      window.updateNavForAuth();
+
+      if (window.currentPage === 'interview' && currentInterviewStage === 'start') {
+        setupInterviewSimulation();
+      }
+
+      if (window.currentPage === 'chat') {
+        setupChatMic();
+      }
+      // Ensure dynamic page scripts are wired after innerHTML injection
+      if (window.currentPage === 'interview' && currentInterviewStage === 'schedule' && typeof wireScheduleForm === 'function') {
+        // Delay slightly to ensure DOM nodes exist
+        setTimeout(() => { try { wireScheduleForm(); } catch (e) { console.error('wireScheduleForm error', e); } }, 0);
+      }
+    };
+
+    // Wire up the schedule form which cannot be attached via inline <script> when using innerHTML
+    function wireScheduleForm() {
+      const form = document.getElementById('schedule-form');
+      if (!form) return;
+      // Remove existing handler to avoid double binding
+      form.onsubmit = null;
+      form.onsubmit = function(ev) {
+        ev.preventDefault();
+        const role = document.getElementById('role').value;
+        const date = document.getElementById('date').value;
+        const time = document.getElementById('time').value;
+        const duration = parseInt(document.getElementById('duration').value || '15', 10);
+        if (!role || !date || !time) { showModal('Missing fields', 'Please select role, date and time.'); return; }
+        const whenTs = new Date(`${date}T${time}:00`).getTime();
+        const now = Date.now();
+        if (whenTs < now) { showModal('Invalid Time', 'Please select a time in the future.'); return; }
+        const iv = { id: 'iv_'+Date.now(), role, whenTs, duration };
+        window.selectedInterviewId = iv.id;
+        window.saveInterview(iv);
+        window.showModal('Success!', 'Your interview has been scheduled. You can attend it via the Attend button at the scheduled time.');
+        window.showInterviewStage('main');
+      };
+    }
+
+    window.showPage = (pageName, fromBack = false) => {
+      if (!fromBack && window.currentPage) historyStack.push(window.currentPage);
+      // Gate protected pages
+      if ((pageName === 'chat' || pageName === 'interview') && !(window.uiAuth && window.uiAuth.isLoggedIn)) {
+        requireLogin(pageName);
+        return;
+      }
+      window.currentPage = pageName;
+      if (pageName !== 'interview') currentInterviewStage = 'main';
+      renderPage();
+      window.scrollTo(0, 0);
+    };
+
+    window.showInterviewStage = (stageName) => {
+      currentInterviewStage = stageName;
+      window.showPage('interview');
+    };
+
+    // Auth flow (UI)
+    window.performLogin = () => {
+      const idEl = document.getElementById('login-identifier');
+      const identifier = idEl ? String(idEl.value || '').trim() : '';
+      const passwordEl = document.getElementById('login-password');
+      const password = passwordEl ? passwordEl.value : '';
+      if (!identifier || !password) { showModal('Missing fields', 'Please enter your username/email and password.'); return; }
+      const looksLikeEmail = identifier.includes('@');
+      const username = looksLikeEmail ? (identifier.split('@')[0] || 'User') : identifier;
+      const email = looksLikeEmail ? identifier : '';
+      const name = username;
+      window.uiAuth.isLoggedIn = true;
+      window.uiAuth.profile = { username, name, email };
+      persistProfile();
+      showModal('Welcome', `Welcome, ${username}. You are now logged in.\nExplore the SkillForge AI magic!`);
+      showPage('home');
+    };
+
+    window.performSignup = () => {
+      const usernameEl = document.getElementById('signup-username');
+      const nameEl = document.getElementById('signup-name');
+      const emailEl = document.getElementById('signup-email');
+      const pwdEl = document.getElementById('signup-password');
+      const username = usernameEl ? String(usernameEl.value || '').trim() : '';
+      const name = nameEl ? String(nameEl.value || '').trim() : '';
+      const email = emailEl ? String(emailEl.value || '').trim() : '';
+      const pwd = pwdEl ? String(pwdEl.value || '').trim() : '';
+      if (!username || !name || !email || !pwd) { showModal('Missing fields', 'Please fill all fields to create your account.'); return; }
+      window.uiAuth.isLoggedIn = true;
+      window.uiAuth.profile = { username, name, email };
+      persistProfile();
+      showModal('Welcome', `Welcome, ${username}. Your account is ready!`);
+      showPage('home');
+    };
+
+    // Interview simulation/media
+    let currentQuestionIndex = 0;
+    const interviewQuestions = [
+      'Tell me about a time you faced a challenging technical problem and how you overcame it.',
+      'What is your understanding of the SOLID principles in software design?',
+      'How do you prioritize features when deadlines are tight?',
+      'What do you look for in a team environment?',
+      'Do you have any questions for me about the role or the company?'
+    ];
+
+    let isRecording = false;
+    let recordingTimer = null;
+    let transcriptionText = 'Click the microphone button to start recording your answer...';
+    let sessionCountdownTimer = null;
+    let sessionRemainingSeconds = 45 * 60; // 45 minutes
+    let questionTimer = null;
+    let questionSeconds = 60;
+
+    let mediaStream = null;
+    let isVideoEnabled = true;
+
+    async function ensureMediaAccess(previewVideoElId) {
+      try {
+        if (!mediaStream) {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        }
+        const videoEl = document.getElementById(previewVideoElId);
+        if (videoEl && 'srcObject' in videoEl) videoEl.srcObject = mediaStream;
+        if (videoEl) videoEl.play && videoEl.play().catch(() => {});
+        return mediaStream;
+      } catch (err) {
+        console.error('Media access error', err);
+        showModal('Permission Required', 'Please allow camera and microphone to use Interview.');
+        return null;
+      }
+    }
+
+    function startSessionCountdown() {
+      stopSessionCountdown();
+      const labelEl = document.getElementById('session-timer');
+      function tick() {
+        if (!labelEl) return;
+        const min = Math.floor(sessionRemainingSeconds / 60).toString().padStart(2, '0');
+        const sec = (sessionRemainingSeconds % 60).toString().padStart(2, '0');
+        labelEl.textContent = `${min}:${sec}`;
+        if (sessionRemainingSeconds <= 0) { stopSessionCountdown(); showModal('Time Up', 'Interview session has ended.'); return; }
+        sessionRemainingSeconds -= 1;
+      }
+      tick();
+      sessionCountdownTimer = setInterval(tick, 1000);
+    }
+
+    function stopSessionCountdown() { if (sessionCountdownTimer) clearInterval(sessionCountdownTimer); sessionCountdownTimer = null; }
+
+    function startQuestionTimer() {
+      stopQuestionTimer();
+      questionSeconds = 60;
+      const nextBtn = document.getElementById('next-question-btn');
+      if (nextBtn) { nextBtn.disabled = true; nextBtn.classList.add('opacity-50', 'cursor-not-allowed'); }
+      const qNumEl = document.getElementById('question-number');
+      const qTotal = interviewQuestions.length;
+      if (qNumEl) qNumEl.textContent = `Question ${currentQuestionIndex + 1} of ${qTotal}`;
+      questionTimer = setInterval(() => {
+        const qLabel = document.getElementById('question-timer');
+        if (qLabel) qLabel.textContent = `${questionSeconds}s`;
+        if (questionSeconds === 30 && nextBtn) { nextBtn.disabled = false; nextBtn.classList.remove('opacity-50', 'cursor-not-allowed'); }
+        if (questionSeconds <= 0) { goNextQuestion(); }
+        questionSeconds -= 1;
+      }, 1000);
+    }
+    function stopQuestionTimer() { if (questionTimer) clearInterval(questionTimer); questionTimer = null; }
+
+    function stopMedia() { if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); } mediaStream = null; }
+
+    function goNextQuestion() {
+      stopQuestionTimer();
+      const nextBtn = document.getElementById('next-question-btn');
+      if (nextBtn) { nextBtn.disabled = true; nextBtn.classList.add('opacity-50', 'cursor-not-allowed'); }
+      if (currentQuestionIndex < interviewQuestions.length - 1) {
+        currentQuestionIndex++;
+        const transcriptionArea = document.getElementById('transcribed-text');
+        const questionDisplay = document.getElementById('current-question-text');
+        if (transcriptionArea) transcriptionArea.innerHTML = `<span class="text-gray-400">Click the microphone button to start recording your answer...</span>`;
+        if (questionDisplay) questionDisplay.textContent = interviewQuestions[currentQuestionIndex];
+        startQuestionTimer();
+      } else {
+        finishInterview();
+      }
+    }
+
+    function finishInterview() {
+      stopQuestionTimer();
+      stopSessionCountdown();
+      // Generate mock results
+      const result = {
+        id: `res_${Date.now()}`,
+        timestamp: Date.now(),
+        accuracy: Math.round(70 + Math.random() * 30),
+        score: Math.round(60 + Math.random() * 40),
+        confidence: Math.round(65 + Math.random() * 35),
+        totalTimeSec: 60 * (currentQuestionIndex + 1)
+      };
+      saveResult(result);
+      showModal('Interview Ended', `Accuracy: ${result.accuracy}%\nScore: ${result.score}\nConfidence: ${result.confidence}%\nTime: ${Math.round(result.totalTimeSec/60)} min`);
+      showInterviewStage('attend');
+      currentQuestionIndex = 0;
+      stopMedia();
+    }
+
+    const setupInterviewSimulation = () => {
+      const startBtn = document.getElementById('start-stop-btn');
+      const timerDisplay = document.getElementById('recording-timer');
+      const questionDisplay = document.getElementById('current-question-text');
+      const roleLabel = document.getElementById('role-label');
+
+      if (!startBtn || !timerDisplay || !questionDisplay) return;
+
+      // Details from selected interview
+      const iv = getSelectedInterview();
+      if (roleLabel) roleLabel.textContent = iv ? iv.role : 'Role: --';
+
+      questionDisplay.textContent = interviewQuestions[currentQuestionIndex];
+      const transcriptionArea = document.getElementById('transcribed-text');
+      if (transcriptionArea) transcriptionArea.innerHTML = `<span class="text-gray-400">${transcriptionText}</span>`;
+
+      ensureMediaAccess('user-video');
+
+      // Start countdown timers if not running
+      if (!sessionCountdownTimer) startSessionCountdown();
+      startQuestionTimer();
+
+      const updateUI = () => {
+        if (startBtn) {
+          startBtn.innerHTML = isRecording
+            ? `<i data-lucide="square" class="w-6 h-6 mr-2"></i> Stop Recording`
+            : `<i data-lucide="mic" class="w-6 h-6 mr-2"></i> Start Recording`;
+          startBtn.classList.toggle('bg-red-600', isRecording);
+          startBtn.classList.toggle('hover:bg-red-700', isRecording);
+          startBtn.classList.toggle('bg-indigo-600', !isRecording);
+          startBtn.classList.toggle('hover:bg-indigo-700', !isRecording);
+          if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+        }
+        if (timerDisplay) timerDisplay.classList.toggle('text-red-600', isRecording);
+      };
+
+      const toggleRecording = () => {
+        isRecording = !isRecording;
+        clearInterval(recordingTimer);
+        if (isRecording) {
+          let seconds = 0;
+          transcriptionText = 'Recording... Please speak clearly.';
+          if (transcriptionArea) transcriptionArea.innerHTML = `<span class="text-indigo-600 font-medium animate-pulse">${transcriptionText}</span>`;
+          recordingTimer = setInterval(() => {
+            seconds++;
+            const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const sec = (seconds % 60).toString().padStart(2, '0');
+            timerDisplay.textContent = `${min}:${sec}`;
+          }, 1000);
+        } else {
+          const finalAnswer = "Okay, that's a great question. I would handle this by first assessing the root cause of the problem, collaborating with my team, and then implementing a scalable, well-tested solution. For example, in my previous role...";
+          transcriptionText = finalAnswer.slice(0, 150 + Math.floor(Math.random() * 50)) + '... [Transcription Complete]';
+          if (transcriptionArea) transcriptionArea.textContent = transcriptionText;
+          timerDisplay.textContent = '00:00';
+        }
+        updateUI();
+      };
+
+      startBtn.onclick = toggleRecording;
+
+      const toggleCamBtn = document.getElementById('toggle-camera-btn');
+      if (toggleCamBtn) {
+        toggleCamBtn.onclick = async () => {
+          const stream = await ensureMediaAccess('user-video');
+          if (!stream) return;
+          const videoTracks = stream.getVideoTracks();
+          if (videoTracks && videoTracks[0]) {
+            isVideoEnabled = !isVideoEnabled;
+            videoTracks[0].enabled = isVideoEnabled;
+            toggleCamBtn.innerHTML = isVideoEnabled
+              ? `<i data-lucide="video" class="w-5 h-5 mr-2"></i> Turn Camera Off`
+              : `<i data-lucide="video-off" class="w-5 h-5 mr-2"></i> Turn Camera On`;
+            if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+          }
+        };
+      }
+
+      const nextBtn = document.getElementById('next-question-btn');
+      if (nextBtn) nextBtn.onclick = goNextQuestion;
+
+      const endBtn = document.getElementById('end-interview-btn');
+      if (endBtn) endBtn.onclick = finishInterview;
+
+      updateUI();
+    };
+
+    // Local persistence helpers
+    function getProfileKey() {
+      const username = (window.uiAuth && window.uiAuth.profile && window.uiAuth.profile.username) || 'guest';
+      return `sf_${username}`;
+    }
+    function loadArray(key) {
+      try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : []; } catch(e) { return []; }
+    }
+    function saveArray(key, arr) { try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e) {} }
+
+    function saveInterview(iv) {
+      const key = getProfileKey() + '_interviews';
+      const list = loadArray(key);
+      list.push(iv);
+      saveArray(key, list);
+      return iv;
+    }
+    function listInterviews() { const key = getProfileKey() + '_interviews'; return loadArray(key).sort((a,b)=>a.whenTs-b.whenTs); }
+    function getInterviewById(id) { return listInterviews().find(x=>x.id===id) || null; }
+    function getSelectedInterview() {
+      const list = listInterviews();
+      if (window.selectedInterviewId) return getInterviewById(window.selectedInterviewId) || list[list.length-1] || null;
+      return list[list.length-1] || null;
+    }
+
+    function saveResult(res) { const key = getProfileKey() + '_results'; const list = loadArray(key); list.push(res); saveArray(key, list); }
+    function listResults() { const key = getProfileKey() + '_results'; return loadArray(key); }
+
+    function canAttendInterview(iv) {
+      if (!iv) return false;
+      return Date.now() >= iv.whenTs;
+    }
+
+    function attemptAttendSelected() {
+      const iv = getSelectedInterview();
+      if (!iv) { showModal('No Interview', 'Please schedule an interview first.'); return; }
+      if (!canAttendInterview(iv)) {
+        showModal('Too Early', `Your interview is scheduled for ${new Date(iv.whenTs).toLocaleString()}. You can attend at that time.`);
+        return;
+      }
+      showInterviewStage('attend');
+    }
+
+    function attemptAttend(id) {
+      const iv = getInterviewById(id);
+      if (!iv) { showModal('Not Found', 'Interview not found.'); return; }
+      if (!canAttendInterview(iv)) {
+        showModal('Too Early', `Your interview is scheduled for ${new Date(iv.whenTs).toLocaleString()}. You can attend at that time.`);
+        return;
+      }
+      window.selectedInterviewId = id;
+      showInterviewStage('attend');
+    }
+
+    // Pages
+    const renderLoginPage = () => `
+      <div class="max-w-md mx-auto bg-white dark:bg-gray-900 p-8 rounded-xl shadow-2xl mt-8 sm:mt-12 border border-gray-100 dark:border-gray-800">
+        <h2 class="text-3xl font-extrabold text-gray-900 dark:text-gray-100 mb-6 text-center">Login to SkillForge AI</h2>
+        <div class="space-y-4">
+          <input id="login-identifier" type="text" placeholder="Username or Email Address" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 dark:bg-gray-800 dark:text-gray-100" />
+          <input id="login-password" type="password" placeholder="Password" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 dark:bg-gray-800 dark:text-gray-100" />
+          <button onclick="performLogin()" class="w-full btn-primary bg-indigo-600 text-white p-3 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50 shadow-md">Login</button>
+          <button onclick="showPage('signup')" class="w-full btn-primary bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100 p-3 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600 focus:ring-opacity-50 shadow-md">Go to Signup</button>
+        </div>
+        <p class="mt-6 text-sm text-gray-500 dark:text-gray-400 text-center"><a href="#" onclick="showPage('forgot'); return false;" class="text-indigo-600 hover:text-indigo-800 underline font-medium">Forgot password?</a></p>
+        <div class="mt-4 text-xs text-gray-500 dark:text-gray-400 text-center">(Note: UI simulation. Login creates a local session.)</div>
+      </div>`;
+
+    const renderSignupPage = () => `
+      <div class="max-w-md mx-auto bg-white dark:bg-gray-900 p-8 rounded-xl shadow-2xl mt-8 sm:mt-12 border border-gray-100 dark:border-gray-800">
+        <h2 class="text-3xl font-extrabold text-gray-900 dark:text-gray-100 mb-6 text-center">Create your SkillForge AI account</h2>
+        <form onsubmit="event.preventDefault(); performSignup();" class="space-y-4">
+          <input id="signup-username" type="text" placeholder="Username" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 dark:bg-gray-800 dark:text-gray-100" />
+          <input id="signup-name" type="text" placeholder="Full Name" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 dark:bg-gray-800 dark:text-gray-100" />
+          <input id="signup-email" type="email" placeholder="Email Address" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 dark:bg-gray-800 dark:text-gray-100" />
+          <input id="signup-password" type="password" placeholder="Password" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 dark:bg-gray-800 dark:text-gray-100" />
+          <button type="submit" class="w-full btn-primary bg-indigo-600 text-white p-3 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50 shadow-md">Create Account</button>
+          <button type="button" onclick="showPage('login')" class="w-full bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100 p-3 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition duration-150">Back to Login</button>
+        </form>
+        <div class="mt-4 text-xs text-gray-500 dark:text-gray-400 text-center">(Note: UI simulation. Signup creates a local session.)</div>
+      </div>`;
+
+    const renderForgotPasswordPage = () => `
+      <div class="max-w-md mx-auto bg-white dark:bg-gray-900 p-8 rounded-xl shadow-2xl mt-8 sm:mt-12 border border-gray-100 dark:border-gray-800">
+        <h2 class="text-3xl font-extrabold text-gray-900 dark:text-gray-100 mb-6 text-center">Reset your password</h2>
+        <form onsubmit="event.preventDefault(); showModal('Reset link sent', 'If this email exists we\'ll send reset instructions.'); showPage('login');" class="space-y-4">
+          <input id="forgot-email" type="email" placeholder="Email Address" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 dark:bg-gray-800 dark:text-gray-100" />
+          <div class="flex gap-3">
+            <button type="submit" class="flex-1 btn-primary bg-indigo-600 text-white p-3 rounded-lg font-semibold hover:bg-indigo-700">Send Reset Link</button>
+            <button type="button" onclick="showPage('login')" class="px-4 py-3 rounded-lg font-semibold bg-gray-200 dark:bg-gray-700 dark:text-gray-100">Back</button>
+          </div>
+        </form>
+      </div>`;
+
+    const renderHomePage = () => {
+      const isLoggedIn = !!(window.uiAuth && window.uiAuth.isLoggedIn);
+      return `
+      <div class="text-center mb-12">
+        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-gray-100 mb-4">Welcome to Your SkillForge AI Assistant</h2>
+        <p class="text-lg sm:text-xl text-gray-600 dark:text-gray-300">Choose a path to boost your career potential.</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
+        <a href="#" onclick="return navigateToProtected('chat')" class="relative card-hover bg-white dark:bg-gray-900 p-8 rounded-xl shadow-xl border border-indigo-200 dark:border-indigo-900/50 flex flex-col items-center text-center group cursor-pointer">
+          <div class="p-4 bg-indigo-100 dark:bg-indigo-900/40 rounded-full mb-4 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/60 transition duration-300"><i data-lucide="message-square-text" class="w-10 h-10 text-indigo-600"></i></div>
+          <h3 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">AI Chat Assistant</h3>
+          <p class="text-gray-600 dark:text-gray-300">Talk to our Dialogflow-powered assistant.</p>
+          <span class="mt-4 text-indigo-600 font-semibold flex items-center">Start Chat <i data-lucide="arrow-right" class="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1"></i></span>
+          ${!isLoggedIn ? '<div class="protected-overlay rounded-xl"><i data-lucide="lock" class="w-4 h-4 mr-2"></i> Login required</div>' : ''}
+        </a>
+        <a href="#" onclick="return navigateToProtected('interview')" class="relative card-hover bg-white dark:bg-gray-900 p-8 rounded-xl shadow-xl border border-teal-200 dark:border-teal-900/50 flex flex-col items-center text-center group cursor-pointer">
+          <div class="p-4 bg-teal-100 dark:bg-teal-900/40 rounded-full mb-4 group-hover:bg-teal-200 dark:group-hover:bg-teal-800/60 transition duration-300"><i data-lucide="user-check" class="w-10 h-10 text-teal-600"></i></div>
+          <h3 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">AI Interview Practice</h3>
+          <p class="text-gray-600 dark:text-gray-300">Schedule or attend a mock interview with real-time feedback.</p>
+          <span class="mt-4 text-teal-600 font-semibold flex items-center">Prepare Now <i data-lucide="arrow-right" class="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1"></i></span>
+          ${!isLoggedIn ? '<div class="protected-overlay rounded-xl"><i data-lucide="lock" class="w-4 h-4 mr-2"></i> Login required</div>' : ''}
+        </a>
+        <div class="card-hover bg-white dark:bg-gray-900 p-8 rounded-xl shadow-xl border border-amber-200 dark:border-amber-900/50 flex flex-col items-center text-center">
+          <div class="p-4 bg-amber-100 dark:bg-amber-900/40 rounded-full mb-4"><i data-lucide="briefcase" class="w-10 h-10 text-amber-600"></i></div>
+          <h3 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Explore Roles</h3>
+          <p class="text-gray-600 dark:text-gray-300">Coming Soon</p>
+          <span class="mt-4 text-amber-600 font-semibold flex items-center">Stay tuned</span>
+        </div>
+      </div>`;
+    };
+
+    const renderChatPage = () => `
+      <div class="relative">
+        <div class="max-w-5xl mx-auto mb-6 text-center">
+          <h3 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2 flex items-center justify-center"><i data-lucide="bot" class="w-6 h-6 mr-2"></i> Skill-GPT</h3>
+          <p class="text-gray-600 dark:text-gray-300">Ask anything about studies and careers.</p>
+          <div class="mt-3 text-sm text-gray-600 dark:text-gray-400">Tip: Try “Suggest a 30-day plan to learn React.”</div>
+        </div>
+        <div class="relative flex justify-center">
+          <!-- The Dialogflow widget is fixed; we still add a container so page has height -->
+          <div class="w-full h-[70vh]"></div>
+        </div>
+        <!-- Input bar (mic + input + send) aligned bottom center -->
+        <div class="fixed z-40 bottom-6 left-1/2 -translate-x-1/2 w-[min(92vw,900px)]">
+          <div class="chat-input-wrapper bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full px-3 py-2 flex items-center gap-2">
+            <button id="chat-mic-btn" class="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-indigo-600 text-white hover:bg-indigo-700" title="Speak"><i data-lucide="mic" class="w-5 h-5"></i></button>
+            <input id="chat-input" type="text" placeholder="Ask something..." class="flex-1 bg-transparent outline-none px-2 text-gray-900 dark:text-gray-100 placeholder:text-gray-400" />
+            <button id="chat-send-btn" class="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-indigo-600 text-white hover:bg-indigo-700" title="Send"><i data-lucide="arrow-up-right" class="w-5 h-5"></i></button>
+          </div>
+        </div>
+      </div>
+      <!-- Messenger element present globally; ensure attributes filled via globals if available -->
+      <df-messenger id="df-widget" location="us-central1" project-id="striped-graph-474712-q9" agent-id="b1475066-5f71-4002-9d2c-4ebd0def4fae" language-code="en" max-query-length="-1">
+        <df-messenger-chat chat-title="SKillForgeAI"></df-messenger-chat>
+      </df-messenger>`;
+
+    function setupChatMic() {
+      const micBtn = document.getElementById('chat-mic-btn');
+      const input = document.getElementById('chat-input');
+      const sendBtn = document.getElementById('chat-send-btn');
+      const DF = document.getElementById('df-widget');
+      let recognition = null; let listening = false;
+      function ensureRecognizer() {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) { showModal('Unavailable', 'Speech recognition not supported in this browser.'); return null; }
+        if (!recognition) {
+          recognition = new SR();
+          recognition.lang = 'en-US';
+          recognition.interimResults = false;
+        }
+        return recognition;
+      }
+      function sendToDf(text) {
+        const trimmed = String(text || '').trim();
+        if (!trimmed) return;
+        try {
+          if (DF && typeof DF.renderCustomText === 'function') {
+            DF.renderCustomText(trimmed);
+          }
+          const chatEl = document.querySelector('df-messenger-chat');
+          const inputEl = chatEl && chatEl.shadowRoot ? chatEl.shadowRoot.querySelector('input[type="text"], textarea') : null;
+          if (inputEl) {
+            inputEl.value = trimmed;
+            inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+          }
+        } catch (e) { console.warn('DF send error', e); }
+      }
+      if (sendBtn) {
+        sendBtn.onclick = () => { sendToDf(input && input.value); if (input) input.value = ''; };
+      }
+      if (input) {
+        input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendToDf(input.value); input.value=''; } };
+      }
+      if (micBtn) {
+        micBtn.onclick = () => {
+          const rec = ensureRecognizer();
+          if (!rec) return;
+          if (!listening) {
+            listening = true;
+            micBtn.classList.add('animate-pulse');
+            rec.start();
+            rec.onresult = (ev) => {
+              const text = ev.results[0][0].transcript;
+              if (input) input.value = text;
+              sendToDf(text);
+            };
+            rec.onend = () => { listening = false; micBtn.classList.remove('animate-pulse'); };
+            rec.onerror = () => { listening = false; micBtn.classList.remove('animate-pulse'); };
+          } else {
+            try { rec.stop(); } catch(e) {}
+            listening = false; micBtn.classList.remove('animate-pulse');
+          }
+        };
+      }
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+    }
+
+    const renderInterviewPage = () => {
+      let content = '';
+      switch (currentInterviewStage) {
+        case 'main': content = renderInterviewMainStage(); break;
+        case 'schedule': content = renderInterviewScheduleStage(); break;
+        case 'attend': content = renderInterviewAttendStage(); break;
+        case 'start': content = renderInterviewStartPage(); break;
+      }
+      if (currentInterviewStage !== 'start') {
+        return `
+          <h2 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-6 text-center">AI Interview Practice</h2>
+          ${content}
+          <div class="mt-12 text-center">
+            <a href="#" onclick="return navigateToProtected('chat')" class="inline-flex items-center text-indigo-600 dark:text-indigo-400 font-semibold hover:text-indigo-800 dark:hover:text-indigo-300 transition duration-150 group">
+              <i data-lucide="message-square-text" class="w-5 h-5 mr-2"></i>
+              Need quick advice? Go to AI Chat Assistant
+              <i data-lucide="arrow-right" class="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1"></i>
+            </a>
+          </div>`;
+      }
+      return content;
+    };
+
+    const renderInterviewMainStage = () => {
+      const nextIv = getSelectedInterview();
+      const details = nextIv ? `Role: ${nextIv.role} | ${new Date(nextIv.whenTs).toLocaleString()} | ${nextIv.duration} min` : 'No interviews scheduled yet.';
+      const canAttend = nextIv ? canAttendInterview(nextIv) : false;
+      return `
+      <p class="text-center text-lg text-gray-600 dark:text-gray-300 mb-6">What would you like to do?</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <a href="#" onclick="showInterviewStage('schedule')" class="card-hover bg-white dark:bg-gray-900 p-6 rounded-xl shadow-lg border-2 border-indigo-400 dark:border-indigo-900/60 hover:border-indigo-600 flex flex-col items-center text-center group cursor-pointer">
+          <i data-lucide="calendar-plus" class="w-8 h-8 text-indigo-600 mb-3"></i>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">Schedule New Interview</h3>
+          <p class="text-gray-500 dark:text-gray-300 text-sm">Set a date, time, and role for your mock interview.</p>
+        </a>
+        <a href="#" onclick="${canAttend ? 'showInterviewStage(\'attend\')' : 'attemptAttendSelected()'}" class="relative card-hover bg-white dark:bg-gray-900 p-6 rounded-xl shadow-lg border-2 border-teal-400 dark:border-teal-900/60 hover:border-teal-600 flex flex-col items-center text-center group cursor-pointer">
+          <i data-lucide="video" class="w-8 h-8 text-teal-600 mb-3"></i>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">Attend Existing Interview</h3>
+          <p class="text-gray-500 dark:text-gray-300 text-sm">${details}</p>
+          ${nextIv && !canAttend ? '<div class="protected-overlay rounded-xl"><i data-lucide="clock" class="w-4 h-4 mr-2"></i> Available at scheduled time</div>' : ''}
+        </a>
+      </div>
+      <div class="max-w-3xl mx-auto mt-8">${renderMyInterviewsPreview()}</div>`;
+    };
+
+    function renderMyInterviewsPreview() {
+      const list = listInterviews();
+      if (!list.length) return '';
+      const items = list.map(iv => {
+        const canStart = canAttendInterview(iv);
+        return `
+        <div class="flex items-center justify-between p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-700">
+          <div>
+            <p class="font-semibold text-gray-800 dark:text-gray-100">${iv.role}</p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">${new Date(iv.whenTs).toLocaleString()} • ${iv.duration} min</p>
+          </div>
+          <div class="flex gap-2">
+            <button class="px-3 py-2 rounded ${canStart ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}" onclick="${canStart ? `window.selectedInterviewId='${iv.id}'; showInterviewStage('attend')` : `attemptAttend('${iv.id}')`}">${canStart ? 'Attend' : 'Not Available Yet'}</button>
+          </div>
+        </div>`;}).join('');
+      return `
+        <div class="bg-gradient-to-r from-indigo-50 to-teal-50 dark:from-slate-900 dark:to-slate-800 p-5 rounded-xl border dark:border-gray-700">
+          <div class="flex items-center justify-between mb-3"><h4 class="font-bold text-gray-800 dark:text-gray-100 flex items-center"><i data-lucide='calendar' class='w-5 h-5 mr-2'></i> My Interviews</h4><a href="#" onclick="showPage('myinterviews')" class="text-indigo-600 dark:text-indigo-400 text-sm hover:underline">View all</a></div>
+          <div class="space-y-3">${items}</div>
+        </div>`;
+    }
+
+    const renderInterviewScheduleStage = () => {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth()+1).padStart(2,'0');
+      const dd = String(today.getDate()).padStart(2,'0');
+      const minDate = `${yyyy}-${mm}-${dd}`;
+      return `
+      <div class="max-w-xl mx-auto bg-white dark:bg-gray-900 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800">
+        <h3 class="text-2xl font-bold text-indigo-700 dark:text-indigo-400 mb-6">Schedule Your Mock Interview</h3>
+        <form id="schedule-form" class="space-y-5">
+          <div>
+            <label for="role" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Target Job Role</label>
+            <select id="role" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-gray-100">
+              <option value="">Select a Role</option>
+              <option>Software Engineer (Frontend)</option>
+              <option>Data Scientist</option>
+              <option>Product Manager</option>
+              <option>UX Designer</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
+              <input type="date" id="date" min="${minDate}" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-gray-100" />
+            </div>
+            <div>
+              <label for="time" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time</label>
+              <input type="time" id="time" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-gray-100" />
+            </div>
+          </div>
+          <div>
+            <label for="duration" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Duration (minutes)</label>
+            <select id="duration" class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-gray-100">
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="15" selected>15</option>
+            </select>
+          </div>
+          <div class="flex justify-end space-x-3 pt-2">
+            <button type="button" onclick="showInterviewStage('main')" class="bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100 p-3 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition duration-150">Cancel</button>
+            <button type="submit" class="btn-primary bg-indigo-600 text-white p-3 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50 shadow-md">Confirm Schedule</button>
+          </div>
+        </form>
+      </div>`;
+    };
+
+    const renderInterviewAttendStage = () => {
+      const iv = getSelectedInterview();
+      const role = iv ? iv.role : 'Software Engineer (Frontend)';
+      const duration = iv ? iv.duration : 15;
+      const when = iv ? new Date(iv.whenTs).toLocaleString() : 'When: --';
+      const canStart = iv ? canAttendInterview(iv) : false;
+      return `
+      <div class="max-w-2xl mx-auto bg-white dark:bg-gray-900 p-8 sm:p-10 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800 text-center">
+        <div class="text-teal-500 mb-4 animate-pulse"><i data-lucide="webcam" class="w-12 h-12 mx-auto"></i></div>
+        <h3 class="text-3xl font-bold text-teal-700 dark:text-teal-400 mb-3">Ready to Begin?</h3>
+        <p class="text-gray-600 dark:text-gray-300 mb-6">Your mock interview is ready to start. Please ensure your microphone and camera are working correctly.</p>
+        <div class="p-4 bg-teal-50 dark:bg-teal-900/30 rounded-lg mb-6">
+          <p class="text-sm font-medium text-teal-700 dark:text-teal-300"><i data-lucide="info" class="w-4 h-4 inline mr-1"></i> Role: ${role} | Duration: ${duration} minutes</p>
+          <p class="text-xs text-teal-600 dark:text-teal-400 mt-1">${when}</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div class="bg-gray-900 rounded-lg overflow-hidden relative h-48">
+            <video id="attend-video" class="w-full h-full object-cover" autoplay muted playsinline></video>
+            <div class="absolute bottom-2 left-2 bg-teal-600 text-white text-xs px-2 py-1 rounded">Camera Preview</div>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 text-left">
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-2 font-semibold">Microphone Level</p>
+            <div id="mic-level" class="h-2 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden"><div id="mic-bar" class="h-full w-1/12 bg-teal-500 transition-all"></div></div>
+            <button class="mt-4 bg-teal-600 text-white px-3 py-2 rounded hover:bg-teal-700" onclick="(async()=>{ const s = await navigator.mediaDevices.getUserMedia({video:true,audio:true}); const v=document.getElementById('attend-video'); if(v){v.srcObject=s; v.play&&v.play();} window.__attendStream=s; try{ const ctx=new AudioContext(); const src=ctx.createMediaStreamSource(s); const analyser=ctx.createAnalyser(); analyser.fftSize=256; src.connect(analyser); const data=new Uint8Array(analyser.frequencyBinCount); const bar=document.getElementById('mic-bar'); function draw(){ analyser.getByteFrequencyData(data); const level=Math.min(100, Math.max(5, Math.round((data[0]+data[1]+data[2])/3/2.55))); if(bar) bar.style.width=level+'%'; requestAnimationFrame(draw);} draw(); }catch(e){ console.warn(e);} })()">Preview Camera & Mic</button>
+          </div>
+        </div>
+        <div class="space-y-4">
+          <button ${!canStart ? 'disabled' : ''} onclick="showInterviewStage('start')" class="w-full btn-primary ${canStart ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-300 cursor-not-allowed'} text-white p-3 rounded-lg font-semibold text-lg focus:outline-none focus:ring-4 ${canStart ? 'focus:ring-teal-500' : ''} focus:ring-opacity-50 shadow-lg flex items-center justify-center"><i data-lucide="video" class="w-6 h-6 mr-3"></i> ${canStart ? 'Start Interview Now' : 'Available at Scheduled Time'}</button>
+          <button onclick="showInterviewStage('main')" class="w-full bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100 p-3 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition duration-150">Back to Interview Menu</button>
+        </div>
+      </div>`;
+    };
+
+    const renderInterviewStartPage = () => {
+      const qTotal = interviewQuestions.length;
+      return `
+      <div class="interview-fullscreen-container flex flex-col lg:flex-row w-full max-w-full mx-auto gap-6">
+        <!-- Left: User video with top timer and role -->
+        <div class="lg:w-1/2 flex flex-col bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-teal-200 dark:border-teal-900/50 p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <p class="text-sm text-gray-800 dark:text-gray-100 font-semibold flex items-center"><i data-lucide="clock" class="w-4 h-4 mr-1"></i> Time Remaining: <span id="session-timer" class="font-bold ml-1">45:00</span></p>
+            <p id="role-label" class="text-sm text-gray-700 dark:text-gray-300"></p>
+          </div>
+          <div class="relative bg-gray-900 rounded-lg overflow-hidden flex-shrink-0" style="height: 350px;">
+            <video id="user-video" class="w-full h-full object-cover" autoplay muted playsinline></video>
+            <div class="absolute bottom-3 left-3 bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-medium">You (Recording: <span id="recording-timer">00:00</span>)</div>
+          </div>
+          <div class="flex flex-wrap gap-3 pt-2">
+            <button id="start-stop-btn" class="flex-grow flex items-center justify-center p-3 rounded-lg font-bold transition duration-150 shadow-lg bg-indigo-600 hover:bg-indigo-700 text-white"><i data-lucide="mic" class="w-6 h-6 mr-2"></i> Start Recording</button>
+            <button id="toggle-camera-btn" class="px-4 py-3 rounded-lg font-semibold bg-gray-200 dark:bg-gray-800 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-700 transition"><i data-lucide="video" class="w-5 h-5 mr-2"></i> Turn Camera Off</button>
+          </div>
+        </div>
+        <!-- Right: Question and transcription -->
+        <div class="lg:w-1/2 flex flex-col bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-indigo-200 dark:border-indigo-900/50 p-6 space-y-4">
+          <div class="flex items-center justify-between p-3 bg-teal-50 dark:bg-teal-900/30 rounded border border-teal-200 dark:border-teal-800">
+            <div>
+              <p id="question-number" class="text-xs font-semibold text-teal-700 dark:text-teal-300 tracking-wide uppercase">Question 1 of ${qTotal}</p>
+              <p id="current-question-text" class="text-lg font-bold text-gray-800 dark:text-gray-100">Loading Question...</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">Timer: <span id="question-timer">60s</span></span>
+            </div>
+          </div>
+          <div class="flex-grow p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-y-auto max-h-[300px] custom-scrollbar">
+            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center"><i data-lucide="mic-vocal" class="w-5 h-5 mr-2"></i> Live Transcription</h4>
+            <p id="transcribed-text" class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed"></p>
+          </div>
+          <div class="flex items-center justify-end gap-3">
+            <button id="next-question-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition duration-150 shadow-md opacity-50 cursor-not-allowed"><i data-lucide="chevron-right" class="w-5 h-5 mr-2"></i> Next Question</button>
+            <button id="end-interview-btn" class="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition duration-150 shadow-md"><i data-lucide="log-out" class="w-5 h-5 mr-2"></i> End Interview</button>
+          </div>
+          <div id="feedback-area" class="text-sm text-yellow-700 dark:text-yellow-300 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-300 dark:border-yellow-800 hidden">
+            <p class="font-semibold flex items-center"><i data-lucide="lightbulb" class="w-4 h-4 mr-2"></i> Real-Time Hint:</p>
+            <p class="mt-1">Remember to use the STAR method to structure your behavioral answers!</p>
+          </div>
+        </div>
+      </div>`;
+    };
+
+    // Profile page with avatar upload
+    const renderProfilePage = () => {
+      const username = (window.uiAuth.profile && window.uiAuth.profile.username) || 'user';
+      const name = (window.uiAuth.profile && window.uiAuth.profile.name) || 'User';
+      const email = (window.uiAuth.profile && window.uiAuth.profile.email) || 'user@example.com';
+      const avatar = getPersistedAvatar();
+      return `
+        <div class="max-w-xl mx-auto bg-white dark:bg-gray-900 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-3xl font-bold text-gray-900 dark:text-gray-100">My Profile</h2>
+            <button class="inline-flex items-center text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900" onclick="goBack()"><i data-lucide='arrow-left' class='w-4 h-4 mr-1'></i> Back</button>
+          </div>
+          <div class="space-y-4">
+            <div class="flex items-center space-x-4">
+              <label class="relative inline-block">
+                <img id="profile-avatar" src="${avatar || ''}" alt="Avatar" class="w-20 h-20 rounded-full object-cover bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800" onerror="this.src='https://via.placeholder.com/80x80/EEF2FF/3730A3?text=SF'" />
+                <input id="avatar-input" type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleAvatarUpload(event)" title="Upload profile picture" />
+                <span class="absolute -bottom-2 -right-2 bg-indigo-600 text-white rounded-full p-1 shadow"><i data-lucide='camera' class='w-4 h-4'></i></span>
+              </label>
+              <div>
+                <p class="text-xl font-semibold text-gray-900 dark:text-gray-100">${name}</p>
+                <p class="text-gray-600 dark:text-gray-300">@${username} • ${email}</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+              <div class="p-4 rounded-lg border bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
+                <p class="text-sm text-gray-500 dark:text-gray-300">Membership</p>
+                <p class="font-semibold text-gray-800 dark:text-gray-100">Free</p>
+              </div>
+              <div class="p-4 rounded-lg border bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
+                <p class="text-sm text-gray-500 dark:text-gray-300">Joined</p>
+                <p class="font-semibold text-gray-800 dark:text-gray-100">Today</p>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    };
+
+    function statsSummary() {
+      const results = listResults();
+      const sessions = results.length;
+      const totalScore = results.reduce((a,b)=>a+b.score,0);
+      const avgScore = sessions ? Math.round(totalScore/sessions) : 0;
+      const avgConf = sessions ? Math.round(results.reduce((a,b)=>a+b.confidence,0)/sessions) : 0;
+      return { sessions, avgScore, avgConf };
+    }
+
+    const renderStatsPage = () => {
+      const s = statsSummary();
+      const list = listResults().slice(-5).reverse().map(r=>`<li class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800"><span class="text-sm text-gray-600 dark:text-gray-300">${new Date(r.timestamp).toLocaleString()}</span><span class="text-sm font-semibold text-gray-800 dark:text-gray-100">Acc ${r.accuracy}% • Score ${r.score} • Conf ${r.confidence}% • ${Math.round(r.totalTimeSec/60)}m</span></li>`).join('') || '<li class="text-sm text-gray-500">No results yet.</li>';
+      return `
+      <div class="max-w-3xl mx-auto">
+        <div class="flex items-center justify-between mb-4"><h2 class="text-3xl font-bold text-gray-900 dark:text-gray-100">Your Stats</h2><button class="inline-flex items-center text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900" onclick="goBack()"><i data-lucide='arrow-left' class='w-4 h-4 mr-1'></i> Back</button></div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-white dark:bg-gray-900 p-6 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+            <p class="text-sm text-gray-500 dark:text-gray-300">Practice Sessions</p>
+            <p class="text-3xl font-bold text-indigo-700 dark:text-indigo-400 mt-2">${s.sessions}</p>
+          </div>
+          <div class="bg-white dark:bg-gray-900 p-6 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+            <p class="text-sm text-gray-500 dark:text-gray-300">Avg Score</p>
+            <p class="text-3xl font-bold text-indigo-700 dark:text-indigo-400 mt-2">${s.avgScore}</p>
+          </div>
+          <div class="bg-white dark:bg-gray-900 p-6 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+            <p class="text-sm text-gray-500 dark:text-gray-300">Avg Confidence</p>
+            <p class="text-3xl font-bold text-indigo-700 dark:text-indigo-400 mt-2">${s.avgConf}%</p>
+          </div>
+        </div>
+        <div class="mt-6 bg-white dark:bg-gray-900 p-6 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+          <h4 class="font-semibold mb-3 text-gray-800 dark:text-gray-100">Recent Results</h4>
+          <ul>${list}</ul>
+        </div>
+      </div>`;
+    };
+
+    const renderWebInfoPage = () => `
+      <div class="max-w-xl mx-auto bg-white dark:bg-gray-900 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800">
+        <div class="flex items-center justify-between mb-6"><h2 class="text-3xl font-bold text-gray-900 dark:text-gray-100">Web Info</h2><button class="inline-flex items-center text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900" onclick="goBack()"><i data-lucide='arrow-left' class='w-4 h-4 mr-1'></i> Back</button></div>
+        <ul class="space-y-2 text-gray-700 dark:text-gray-300">
+          <li><strong>App:</strong> SkillForge AI</li>
+          <li><strong>Version:</strong> 1.0.0</li>
+          <li><strong>UI Framework:</strong> Tailwind CSS</li>
+          <li class="pt-2"><strong>Developed By:</strong><br/>
+            Kesava (Team Lead & Cloud Deployment) • Lokesh (Frontend & Database) • Kedhar (Testing & Optimization) • Rakesh (Data Analytics) • Abhinav (Cloud Architecture) • Jayanand (Full Stack Development)
+          </li>
+        </ul>
+      </div>`;
+
+    const renderContactReportPage = () => `
+      <div class="max-w-3xl mx-auto">
+        <div class="relative overflow-hidden rounded-2xl shadow-2xl border border-indigo-100 dark:border-indigo-900/40">
+          <div class="absolute inset-0 bg-gradient-to-r from-indigo-600 via-purple-600 to-teal-500 opacity-90"></div>
+          <div class="relative p-8 sm:p-12 text-white">
+            <h2 class="text-3xl font-extrabold mb-2">Contact & Report Issues</h2>
+            <p class="opacity-95">Have a question, feedback, or a bug to report? We're listening.</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+          <div class="lg:col-span-2 bg-white dark:bg-gray-900 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800">
+            <form onsubmit="event.preventDefault(); showModal('Report Sent', 'Thank you! Your message has been received and we will review it shortly.'); showPage('home');" class="space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="contact-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your Name</label>
+                  <input type="text" id="contact-name" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-gray-100" />
+                </div>
+                <div>
+                  <label for="contact-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address</label>
+                  <input type="email" id="contact-email" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-gray-100" />
+                </div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="contact-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Issue Type</label>
+                  <select id="contact-type" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-gray-100">
+                    <option value="">Select Type</option>
+                    <option>General Inquiry</option>
+                    <option>Technical Bug/Report</option>
+                    <option>Feature Suggestion</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="contact-priority" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
+                  <select id="contact-priority" class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-gray-100">
+                    <option>Normal</option>
+                    <option>High</option>
+                    <option>Urgent</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label for="contact-message" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Message</label>
+                <textarea id="contact-message" rows="5" required class="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-gray-100" placeholder="Describe your issue or idea..."></textarea>
+              </div>
+              <div class="flex items-center justify-between">
+                <label class="inline-flex items-center text-sm text-gray-600 dark:text-gray-300"><input type="checkbox" class="mr-2"/> Send me a copy</label>
+                <button type="submit" class="btn-primary bg-indigo-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50 shadow-md">Send Message</button>
+              </div>
+            </form>
+          </div>
+          <div class="space-y-4">
+            <div class="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800">
+              <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">Quick Contacts</h3>
+              <a href="tel:+911234567890" class="flex items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 mb-2">
+                <i data-lucide="phone" class="w-5 h-5 mr-3 text-indigo-600"></i>
+                <span class="text-gray-800 dark:text-gray-100 font-medium">+91 12345 67890</span>
+              </a>
+              <a href="mailto:support@skillforge.ai" class="flex items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700">
+                <i data-lucide="mail" class="w-5 h-5 mr-3 text-indigo-600"></i>
+                <span class="text-gray-800 dark:text-gray-100 font-medium">support@skillforge.ai</span>
+              </a>
+            </div>
+            <div class="bg-gradient-to-br from-indigo-50 to-teal-50 dark:from-slate-900 dark:to-slate-800 p-6 rounded-xl border dark:border-gray-700">
+              <h4 class="font-semibold text-gray-800 dark:text-gray-100 mb-2 flex items-center"><i data-lucide='sparkles' class='w-4 h-4 mr-2'></i> Tips</h4>
+              <ul class="text-sm text-gray-600 dark:text-gray-300 list-disc pl-5 space-y-1">
+                <li>Attach screenshots for faster diagnostics.</li>
+                <li>Describe steps to reproduce the issue.</li>
+                <li>Include expected vs. actual behavior.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    function renderMyInterviewsPage() {
+      const list = listInterviews();
+      const items = list.map(iv => {
+        const canStart = canAttendInterview(iv);
+        return `
+        <div class="p-5 rounded-xl border bg-white dark:bg-gray-900 dark:border-gray-700 flex items-center justify-between">
+          <div>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">${iv.role}</p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">${new Date(iv.whenTs).toLocaleString()} • ${iv.duration} min</p>
+          </div>
+          <div class="flex gap-2">
+            <button class="px-4 py-2 rounded ${canStart ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}" onclick="${canStart ? `window.selectedInterviewId='${iv.id}'; showInterviewStage('attend')` : `attemptAttend('${iv.id}')`}">${canStart ? 'Start' : 'Not Available Yet'}</button>
+          </div>
+        </div>`;}).join('') || '<div class="text-center text-gray-600 dark:text-gray-300 p-8 border rounded-xl dark:border-gray-700">No interviews yet. Schedule one to see it here.</div>';
+      return `
+        <div class="max-w-3xl mx-auto">
+          <div class="flex items-center justify-between mb-4"><h2 class="text-3xl font-bold text-gray-900 dark:text-gray-100">My Interviews</h2><button class="inline-flex items-center text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900" onclick="goBack()"><i data-lucide='arrow-left' class='w-4 h-4 mr-1'></i> Back</button></div>
+          <div class="space-y-4">${items}</div>
+        </div>`;
+    }
+
+    // Initial render
+    renderPage();
+
+    document.addEventListener('DOMContentLoaded', () => {
+      window.updateNavForAuth();
+
+      // Drawer backdrop click
+      const backdrop = document.getElementById('drawer-backdrop');
+      if (backdrop) backdrop.addEventListener('click', closeDrawer);
+
+      // Click outside to close profile menu
+      document.addEventListener('click', (e) => {
+        const menu = document.getElementById('profile-menu');
+        const btn = document.getElementById('profile-button');
+        if (!menu) return;
+        if (btn && (btn.contains(e.target) || menu.contains(e.target))) return;
+        menu.classList.add('hidden');
+      });
+
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+    });
+
+    // Avatar persistence
+    function persistProfile() { try { localStorage.setItem('sf_profile', JSON.stringify(window.uiAuth.profile || {})); } catch(e) {} }
+    function loadProfile() { try { const raw = localStorage.getItem('sf_profile'); if (raw) { window.uiAuth.profile = JSON.parse(raw); window.uiAuth.isLoggedIn = !!window.uiAuth.profile && Object.keys(window.uiAuth.profile).length > 0; } } catch(e) {} }
+    function persistAvatar(dataUrl) { try { localStorage.setItem('sf_avatar', dataUrl); } catch(e) {} }
+    function getPersistedAvatar() { try { return localStorage.getItem('sf_avatar'); } catch(e) { return null; } }
+    window.handleAvatarUpload = (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) { const dataUrl = ev.target.result; const img = document.getElementById('profile-avatar'); if (img) img.src = dataUrl; persistAvatar(dataUrl); loadHeaderAvatar(); };
+      reader.readAsDataURL(file);
+    };
+    function loadHeaderAvatar() {
+      const url = getPersistedAvatar();
+      const img = document.getElementById('header-avatar');
+      const icon = document.getElementById('header-avatar-icon');
+      if (img) {
+        if (url) { img.src = url; img.classList.remove('hidden'); if (icon) icon.style.display = 'none'; }
+        else { img.classList.add('hidden'); if (icon) icon.style.display = 'inline-block'; }
+      }
+    }
+
+    // Expose interview helpers for inline handlers inside templates
+    window.saveInterview = saveInterview;
+
+    // Restore session on load
+    loadProfile();
+    setTimeout(loadHeaderAvatar, 0);
+  </script>
+</body>
+</html>
